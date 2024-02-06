@@ -13,6 +13,7 @@ import com.example.querydsl.repo.ItemRepository;
 import com.example.querydsl.repo.ShopRepository;
 import com.querydsl.core.QueryResults;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -188,6 +189,66 @@ public class QuerydslQueryTests {
                 .fetch();
 
         for (Item found : foundList) {
+            System.out.printf("%s: %d (%d)%n", found.getName(), found.getPrice(), found.getStock());
+        }
+    }
+
+    // WHERE
+    @Test
+    public void where() {
+        // item.(속성).(조건)
+        // equals ( = )
+        item.name.eq("itemA");
+        // not equals ( != )
+        item.name.ne("itemB");
+        // equals -> not (!( = ))
+        item.name.eq("itemC").not();
+
+        // is null
+        item.name.isNull();
+        // is not null
+        item.name.isNotNull();
+        item.name.isNotEmpty();
+
+        // < <= >= >
+        item.price.lt(6000);
+        item.price.loe(6000);
+        item.price.goe(6000);
+        item.price.gt(7000);
+
+        item.price.between(5000, 10000);
+        item.price.in(5000, 6000, 7000, 8000);
+
+        // like, contains, startsWith, endsWith
+        // like 는 SQL 문법을 따른다. (%, _ 등등 삽입)
+        item.name.like("%item_");
+         // contains : arg -> %arg% (인자가 들어가면은 %인자%)
+        item.name.contains("item");
+        // startsWidh, endsWith -> arg%, %arg
+        item.name.startsWith("item");
+        item.name.endsWith("A");
+
+        // 시간 관련
+        // 5일 이전이라는 조건을 달아주고 싶다면?
+        // 지금으로 부터 5일전 보다 이후
+        item.createdAt.after(LocalDateTime.now().minusDays(5));
+        // 지금으로 부터 5일전 보다 이전
+        item.createdAt.before(LocalDateTime.now().minusDays(5));
+
+
+
+
+        List<Item> foundItems = queryFactory
+                .selectFrom(item)
+                // where 에 복수개 넣어주면, 전부 만족 (AND 로 엮임)
+                .where(
+                        item.name.isNotNull(),
+                        item.price.lt(8000),
+                        item.stock.gt(20)
+                )
+                .fetch();
+
+        for (Item found : foundItems) {
             System.out.printf("%s: %d (%d)%n", found.getName(), found.getPrice(), found.getStock());
         }
     }
