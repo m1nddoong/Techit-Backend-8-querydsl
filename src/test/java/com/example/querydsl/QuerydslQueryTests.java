@@ -1,18 +1,21 @@
 package com.example.querydsl;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-// 정적 메서드 추가 (가장 깔끔)
 import static com.example.querydsl.entity.QItem.item;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.example.querydsl.entity.Item;
 import com.example.querydsl.entity.QItem;
 import com.example.querydsl.entity.Shop;
 import com.example.querydsl.repo.ItemRepository;
 import com.example.querydsl.repo.ShopRepository;
+import com.querydsl.core.QueryResults;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,17 +23,16 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 
-
 @Transactional
 @SpringBootTest
 @ActiveProfiles("test")
-public class QuerydslQTypeTests {
+public class QuerydslQueryTests {
     @Autowired
     private ItemRepository itemRepository;
     @Autowired
     private ShopRepository shopRepository;
     @Autowired
-    private JPAQueryFactory jpaQueryFactory;
+    private JPAQueryFactory queryFactory;
 
     // @BeforeEach: 각 테스트 전에 실행할 코드를 작성하는 영역
     @BeforeEach
@@ -83,59 +85,79 @@ public class QuerydslQTypeTests {
         ));
     }
 
+
+    // 가지고 오는 방법에 대한 이야기
     @Test
-    public void qType() {
-        QItem qItem = new QItem("item");
-        Item found = jpaQueryFactory
-                .select(qItem)
-                .from(qItem)
-                .where(qItem.name.eq("itemA"))
-                .fetchOne();
-        assertEquals("itemA", found.getName());
+    public void fetch() {
+        // fetch() : 단순하게 전체 조회
+        List<Item> foundList = queryFactory
+                // SELECT FROM 절
+                .selectFrom(item)
+                // 결과를 전체 리스트 형태로 조회
+                .fetch();
+        assertEquals(6, foundList.size());
 
-        found = jpaQueryFactory
-                // SELECT + FROM 절 (가운데 * 뒤 Entity)
-                .selectFrom(qItem)
-                .where(qItem.name.eq("itemB"))
+        // fetchOne() : 하나만 조회
+        Item found = queryFactory
+                .selectFrom(item)
+                .where(item.id.eq(1L))
+                // 하나만 조회
                 .fetchOne();
-        assertEquals("itemB", found.getName());
+        assertEquals(1L, found.getId());
 
-        // QItem 생성자의 인자가 Alias로 동작한다.
-        QItem qItem2 = new QItem("item2");
-        found = jpaQueryFactory
-                .selectFrom(qItem2)
-                .where(qItem2.name.eq("itemC"))
+        found = queryFactory
+                .selectFrom(item)
+                .where(item.id.eq(0L))
+                // 없을 경우 null
                 .fetchOne();
-        assertEquals("itemC", found.getName());
+        assertNull(found);
 
-        // 함부로 섞어 쓰면 예외 발생,
-        // 따라서 예외처리를 위해서 assertThrows 로 감싸줌
         assertThrows(Exception.class, () -> {
-            jpaQueryFactory
-                    // SELECT item FROM Item item (여기서 앨리어스를 item이라 함)
-                    .selectFrom(qItem)
-                    // WHERE item2.name = "itemD" -> ?????  (앨리어스 item 이 아닌 item2 를 사용)
-                    .where(qItem2.name.eq("itemD"))
+            queryFactory.selectFrom(item)
+                    // 2개 이상일 경우 Exception
                     .fetchOne();
         });
-        // 섞어서 써야되는 경우는 "나 자신과의 연관관계"
-        // 친구, 팔로우 관계 ex) User - ManyToMany - User
 
-
-        // 평소에는 기본 정적 QItem 인스턴스를 사용
-        found = jpaQueryFactory
-                .selectFrom(QItem.item)
-                .where(QItem.item.name.eq("itemA"))
-                .fetchOne();
-        assertEquals("itemA", found.getName());
-
-        // import static 으로 바로 사용 가능
-        found = jpaQueryFactory
+        // fetchFirst() : 첫번쨰 결과 또는 Null
+        found = queryFactory
                 .selectFrom(item)
-                .where(item.name.eq("itemB"))
-                .fetchOne();
-        assertEquals("itemB", found.getName());
+                // LIMIT 1 -> fetchOne();
+                // 제일 앞에 있는 것 또는 null 반환
+                .fetchFirst();
+        assertNotNull(found);
+
+        // 페이지 네이션
+        // offset limit
+        foundList = queryFactory
+                .selectFrom(item)
+                // offset 이 3 일떄 3번 까지 스킵하고 4번 부터 시작 -> 4 5
+                .offset(3)
+                .limit(2)
+                .fetch();
+        for (Item find : foundList) {
+            System.out.println(find.getId());
+        }
+
+        // fetchCount() : 결과의 갯수 반환 (deprecated)
+        long count = queryFactory
+                .selectFrom(item)
+                .fetchCount();
+        assertEquals(6, count);
+
+        // fetchResult() : 결과 및 count + offset + limit 정보 반환 (deprecated)
+        QueryResults<Item> results = queryFactory
+                .selectFrom(item)
+                .offset(3)
+                .limit(2)
+                .fetchResults();
+        System.out.println(results.getTotal());
+        System.out.println(results.getOffset());
+        System.out.println(results.getLimit());
+        // 실제 내용은 getResults()
+        foundList = results.getResults();
     }
+
+
 }
 
 
