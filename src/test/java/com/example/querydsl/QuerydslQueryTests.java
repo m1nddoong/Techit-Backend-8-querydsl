@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.example.querydsl.entity.Item;
-import com.example.querydsl.entity.QItem;
 import com.example.querydsl.entity.Shop;
 import com.example.querydsl.repo.ItemRepository;
 import com.example.querydsl.repo.ShopRepository;
@@ -79,7 +78,6 @@ public class QuerydslQueryTests {
                         .stock(10)
                         .build(),
                 Item.builder()
-                        .name("itemE")
                         .price(7500)
                         .stock(25)
                         .build()
@@ -235,9 +233,6 @@ public class QuerydslQueryTests {
         // 지금으로 부터 5일전 보다 이전
         item.createdAt.before(LocalDateTime.now().minusDays(5));
 
-
-
-
         List<Item> foundItems = queryFactory
                 .selectFrom(item)
                 // where 에 복수개 넣어주면, 전부 만족 (AND 로 엮임)
@@ -246,6 +241,7 @@ public class QuerydslQueryTests {
                         item.price.lt(8000),
                         item.stock.gt(20)
                 )
+                .orderBy(item.price.asc())
                 .fetch();
 
         for (Item found : foundItems) {
@@ -253,6 +249,50 @@ public class QuerydslQueryTests {
         }
     }
 
+    // AND 와 OR 조건
+    @Test
+    public void andOr() {
+        List<Item> foundItems = queryFactory
+                .selectFrom(item)
+                .fetch();
+        for (Item found : foundItems) {
+            System.out.println(found);
+        }
+
+
+        foundItems = queryFactory
+                .selectFrom(item)
+                // 가격이 6000 이하 또는 9000 이상
+                // .and() 또는 .or() 를 연쇄 호출할 수 있다. (method chaining)
+                .where(
+                        // [item.price <= 6000
+                        item.price.loe(6000)
+                                // OR (item.price >= 9000)
+                                .or(item.price.goe(9000))
+                                // OR (item.stock in (20 30 40))]
+                                .or(item.stock.in(20, 30, 40))
+                                // AND item.name is not null
+                                .and(item.name.isNotNull())
+                )
+                .fetch();
+        for (Item found : foundItems) {
+            System.out.println(found);
+        }
+
+        foundItems = queryFactory
+                .selectFrom(item)
+                // 가격이 6000 이하 또는 9000 이상
+                // 그리고
+                // 재고가 40 미만 또는 60 초과
+                .where(
+                        item.price.loe(6000).or(item.price.goe(9000)),
+                        item.stock.lt(40).or(item.stock.gt(60))
+                )
+                .fetch();
+        for (Item found : foundItems) {
+            System.out.println(found);
+        }
+    }
 }
 
 

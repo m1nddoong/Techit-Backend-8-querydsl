@@ -83,6 +83,8 @@ public class QuerydslQTypeTests {
         ));
     }
 
+
+
     @Test
     public void qType() {
         QItem qItem = new QItem("item");
