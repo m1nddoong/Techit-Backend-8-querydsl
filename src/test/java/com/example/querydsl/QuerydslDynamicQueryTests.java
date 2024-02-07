@@ -33,16 +33,10 @@ public class QuerydslDynamicQueryTests {
     private ShopRepository shopRepository;
     @Autowired
     private JPAQueryFactory queryFactory;
-    @Autowired
-    private EntityManager entityManager;
-    @Autowired
-    private EntityManagerFactory managerFactory;
-    private PersistenceUnitUtil unitUtil;
 
     // @BeforeEach: 각 테스트 전에 실행할 코드를 작성하는 영역
     @BeforeEach
     public void beforeEach() {
-        unitUtil = managerFactory.getPersistenceUnitUtil();
         Shop shopA = shopRepository.save(Shop.builder()
                 .name("shopA")
                 .description("shop A description")
@@ -67,19 +61,19 @@ public class QuerydslDynamicQueryTests {
                         .shop(shopA)
                         .name("itemB")
                         .price(6000)
-                        .stock(30)
+                        .stock(0)
                         .build(),
                 Item.builder()
                         .shop(shopB)
                         .name("itemC")
                         .price(8000)
-                        .stock(40)
+                        .stock(0)
                         .build(),
                 Item.builder()
                         .shop(shopB)
                         .name("itemD")
                         .price(10000)
-                        .stock(50)
+                        .stock(0)
                         .build(),
                 Item.builder()
                         .name("itemE")
@@ -100,7 +94,7 @@ public class QuerydslDynamicQueryTests {
         Integer price = 5000;
         Integer stock = 20;
 
-        results = booleanBuilder(name, price, stock);
+       /* results = booleanBuilder(name, price, stock);
         results.forEach(System.out::println);
 
         results = booleanBuilder(name, null, null);
@@ -113,7 +107,113 @@ public class QuerydslDynamicQueryTests {
         results.forEach(System.out::println);
 
         results = booleanBuilder(null, null, null);
+        results.forEach(System.out::println);*/
+
+        // ---------------------
+        results = booleanExpressions(name, price, stock);
         results.forEach(System.out::println);
+
+        results = booleanExpressions(name, null, null);
+        results.forEach(System.out::println);
+
+        results = booleanExpressions(null, null, stock);
+        results.forEach(System.out::println);
+
+        results = booleanExpressions(null, price, stock);
+        results.forEach(System.out::println);
+
+        results = booleanExpressions(null, null, null);
+        results.forEach(System.out::println);
+
+        // reusing expressions
+        results = goeOrLoeOrBetween(6000, null);
+        results.forEach(System.out::println);
+        results = goeOrLoeOrBetween(null, 6000);
+        results.forEach(System.out::println);
+        results = goeOrLoeOrBetween(5500, 7500);
+        results.forEach(System.out::println);
+
+    }
+
+    public List<Item> goeOrLoeOrBetween(
+            Integer priceFloor,
+            Integer priceCeil,
+            boolean isAvailable
+    ) {
+        return queryFactory
+                .selectFrom(item)
+                .where(
+                        priceBetween(priceFloor, priceCeil),
+                        isAvailable(isAvailable)
+                )
+                .fetch();
+    }
+
+    private BooleanExpression isAvailable(boolean flag) {
+        return flag ? item.stock.goe(1) : null;
+    }
+
+    public List<Item> goeOrLoeOrBetween(
+            // 둘다 있으면 사잇값
+            // 하나만 있으면, floor는 최솟값, ceil은 최댓값
+            Integer priceFloor,
+            Integer priceCeil
+    ) {
+        return goeOrLoeOrBetween(priceFloor, priceCeil, true);
+        /*return queryFactory
+                .selectFrom(item)
+                .where(priceBetween(priceFloor, priceCeil))
+                .fetch();*/
+    }
+
+    // 조건을 나타내는 메서드를 만드는 것이기 때문에
+    // 조건의 재활용이 간편하다.
+    private BooleanExpression priceBetween(Integer floor, Integer ceil) {
+        if (floor == null && ceil == null) return null;
+        if (floor == null) return priceLoe(ceil);
+        if (ceil == null) return priceGoe(floor);
+        return item.price.between(floor, ceil);
+    }
+
+    private BooleanExpression priceLoe(Integer price) {
+        return price != null ? item.price.loe(price) : null;
+    }
+
+    private BooleanExpression priceGoe(Integer price) {
+        return price != null ? item.price.goe(price) : null;
+    }
+
+    public List<Item> booleanExpressions(
+            String name,
+            Integer price,
+            Integer stock
+    ) {
+        return queryFactory
+                .selectFrom(item)
+                .where(
+                        // 아래와 같이 결과가 나오게끔 하고싶은데,
+                        // 단 인자가 null 이라면 들어가지 않게끔
+                        // -> where 메서드는 null을 인자로 받으면 무시한다.
+                        nameEquals(name),
+                        priceEquals(price),
+                        stockEquals(stock)
+                )
+                .fetch();
+    }
+
+    private BooleanExpression nameEquals(String name) {
+        return name != null ? item.name.eq(name) : null;
+
+//        if (name != null) return item.name.eq(name);
+//        return null;
+    }
+
+    private BooleanExpression priceEquals(Integer price) {
+        return price != null ? item.price.eq(price) : null;
+    }
+
+    private BooleanExpression stockEquals(Integer stock) {
+        return stock != null ? item.stock.eq(stock) : null;
     }
 
     public List<Item> booleanBuilder(
@@ -121,9 +221,9 @@ public class QuerydslDynamicQueryTests {
             Integer price,
             Integer stock
     ) {
-        // 1. BooleanBuilder : 여러 조건을 엮어서 하나의 조건으로 만들어진
-        //                      BooleanBuilder를 사용하는 방법
-        //                      생성자에 초기 조건 생성 가능
+        // 1. BooleanBuilder: 여러 조건을 엮어서 하나의 조건으로 만들어진
+        //                    BooleanBuilder를 사용하는 방법
+        //                    생성자에 초기 조건 상정 가능
         BooleanBuilder booleanBuilder = new BooleanBuilder(item.name.isNotNull());
         // 여태까지 누적된 조건에 대하여, 주어진 조건을 AND로 엮는다.
         if (name != null)
@@ -135,7 +235,6 @@ public class QuerydslDynamicQueryTests {
         if (stock != null)
             // (여태까지의 조건) AND i.stock = stock
             booleanBuilder.and(item.stock.eq(stock));
-        // i.name = name AND i.price = price AND i.stock = stock
 
         return queryFactory
                 .selectFrom(item)
